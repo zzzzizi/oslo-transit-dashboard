@@ -246,6 +246,47 @@ def live_dashboard():
             f"{line_max:.1f} min"
         )
         
+        # -----------------------------------
+        # Map for selected line
+        # -----------------------------------
+
+        st.subheader(f"Line {selected_line} — Stop Map")
+
+        map_df = (
+            line_df
+            .groupby(
+                [
+                    "stop_id",
+                    "stop_name",
+                    "latitude",
+                    "longitude"
+                ],
+                as_index=False
+            )
+            .agg(
+                avg_delay_minutes=(
+            "arrival_delay_minutes",
+                    "mean"
+                ),
+                observations=(
+            "trip_id",
+                    "count"
+                )
+            )
+        )
+
+        # Remove stops without coordinates
+        map_df = map_df.dropna(        
+            subset=["latitude", "longitude"]
+        )
+
+        st.map(
+            map_df,
+            latitude="latitude",
+            longitude="longitude",
+            size=40
+        )
+
         # Average delay by line
         st.subheader("Average Delay by Line")
 
