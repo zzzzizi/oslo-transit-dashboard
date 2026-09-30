@@ -7,6 +7,10 @@ from pathlib import Path
 from datetime import datetime
 from google.transit import gtfs_realtime_pb2
 
+from components.metrics import (
+    show_transport_type_metrics
+)
+
 
 # -----------------------------------
 # Page settings
@@ -28,12 +32,21 @@ STOPS_PATH = (
     / "stops.csv"
 )
 
+ROUTES_PATH = (
+    Path(__file__).parent
+    / "data"
+    / "routes.csv"
+)
 
 @st.cache_data
 def load_stops():
     return pd.read_csv(STOPS_PATH)
 
+@st.cache_data
+def load_routes():
+    return pd.read_csv(ROUTES_PATH)
 
+routes_df = load_routes()
 stops_df = load_stops()
 
 def get_realtime_data():
@@ -130,6 +143,16 @@ def get_realtime_data():
         how="left"
     )
 
+    df = df.merge(
+        routes_df[
+            [
+                "route_id",
+                "transport_type"
+            ]
+        ],
+        on="route_id",
+        how="left"
+    )
     return df
 
 
@@ -196,6 +219,8 @@ def live_dashboard():
             "On Time ±1 min",
             f"{on_time:,}"
         )
+
+        show_transport_type_metrics(df)
 
         # Line filter
         st.divider()
