@@ -7,10 +7,15 @@ from pathlib import Path
 from datetime import datetime
 from google.transit import gtfs_realtime_pb2
 
-from components.metrics import (
-    show_transport_type_metrics
+from components.filters import (
+    filter_line_data
 )
 
+from components.metrics import (
+    show_main_metrics,
+    show_line_metrics,
+    show_transport_type_metrics
+)
 
 # -----------------------------------
 # Page settings
@@ -182,43 +187,8 @@ def live_dashboard():
         st.caption(
         f"Last refreshed: {updated_time}"
         )
-        total_trips = df["trip_id"].nunique()
 
-        average_delay = (
-            df["arrival_delay_minutes"].mean()
-        )
-
-        delayed_over_5 = (
-            df["arrival_delay_minutes"] > 5
-            ).sum()
-
-        on_time = (
-            df["arrival_delay_minutes"]
-            .between(-1, 1)
-        ).sum()
-
-        # Main metrics
-        col1, col2, col3, col4 = st.columns(4)
-
-        col1.metric(
-            "Active Trips",
-            f"{total_trips:,}"
-        )
-
-        col2.metric(
-           "Average Delay",
-           f"{average_delay:.1f} min"
-        )
-
-        col3.metric(
-            "Delayed > 5 min",
-            f"{delayed_over_5:,}"
-        )
-
-        col4.metric(
-            "On Time ±1 min",
-            f"{on_time:,}"
-        )
+        show_main_metrics(df)
 
         show_transport_type_metrics(df)
 
@@ -241,74 +211,14 @@ def live_dashboard():
             df["line_number"] == selected_line
         ].copy()
 
-        delay_filter = st.radio(
-            "Delay status",
-            [
-                "All",
-                "On time",
-                "1-5 min delay",
-                ">5 min delay"
-            ],
-            horizontal=True
+        filtered_line_df = filter_line_data(
+            line_df
         )
 
-        if delay_filter == "On time":
-
-            filtered_line_df = line_df[
-                line_df["arrival_delay_minutes"].between(-1, 1)
-            ].copy()
-
-        elif delay_filter == "1-5 min delay":
-
-            filtered_line_df = line_df[
-                (line_df["arrival_delay_minutes"] > 1)
-                & (line_df["arrival_delay_minutes"] <= 5)
-            ].copy()
-
-        elif delay_filter == ">5 min delay":
-
-            filtered_line_df = line_df[
-                line_df["arrival_delay_minutes"] > 5
-            ].copy()
-
-        else:
-
-            filtered_line_df = line_df.copy()
-
-        line_avg = (
-            filtered_line_df[
-                "arrival_delay_minutes"
-            ].mean()
+        show_line_metrics(
+            filtered_line_df,
+            selected_line
         )
-
-        line_max = (
-            filtered_line_df[
-                "arrival_delay_minutes"
-            ].max()
-        )
-
-
-        col1, col2, col3 = st.columns(3)
-
-        col1.metric(
-            "Selected Line",
-           selected_line
-        )
-
-        col2.metric(
-            "Average Delay",
-            f"{line_avg:.1f} min"
-       )
-
-        col3.metric(
-            "Maximum Delay",
-            f"{line_max:.1f} min"
-        )
-        # Check whether the filter returned anything
-        if filtered_line_df.empty:
-            st.info(
-                "No observations match the selected delay filter."
-            )
 
         # -----------------------------------
         # Map for selected line
@@ -551,7 +461,7 @@ def live_dashboard():
         display_df = filtered_line_df[
             [
                 "stop_name",
-               "arrival_delay_seconds",
+                "arrival_delay_seconds",
                 "arrival_delay_minutes"
             ]
         ].copy()
@@ -588,7 +498,8 @@ def live_dashboard():
         st.error(
             f"Could not retrieve Entur data: {e}"
         )
-        return
+        raise
+        
 
 live_dashboard()
 
