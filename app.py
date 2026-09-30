@@ -398,47 +398,107 @@ def live_dashboard():
 
 
         # Top delayed stops
-        st.subheader("Top 10 Stops by Average Delay")
+        st.subheader("Top 30 Stops by Average Delay")
 
         delay_by_stop = (
             df
             .dropna(
                 subset=[
                     "stop_name",
+                    "latitude",
+                    "longitude",
                     "arrival_delay_minutes"
                 ]
             )
             .groupby(
-                "stop_name",
+                [
+                    "stop_name",
+                    "latitude",
+                    "longitude",
+                ],
                 as_index=False
-            )["arrival_delay_minutes"]
-            .mean()
+            )
+            .agg(
+                avg_delay_minutes=(
+                    "arrival_delay_minutes",
+                    "mean"
+                ),
+                observations=(
+                    "trip_id",
+                    "count"
+                )
+            )
             .sort_values(
-                "arrival_delay_minutes",
+                "avg_delay_minutes",
                 ascending=False
             )
-            .head(50)
+            .head(30)
         )
 
-        fig_stops = px.bar(
-            delay_by_stop,
-            x="stop_name",
-            y="arrival_delay_minutes",
-            labels={
-                "stop_name": "Stop",
-                "arrival_delay_minutes":
-                    "Average delay (minutes)"
-            }
-        )
+        chart_col, map_col = st.columns(2)
 
-        fig_stops.update_xaxes(
-            type="category"
-        )
+        with chart_col:
+            fig_stops = px.bar(
+                delay_by_stop,
+                x="stop_name",
+                y="avg_delay_minutes",
+                labels={
+                    "stop_name": "Stop",
+                    "avg_delay_minutes":
+                        "Average delay (minutes)"
+                }
+            )
+            fig_stops.update_xaxes(
+                type="category"
+            )
 
-        st.plotly_chart(
-            fig_stops,
-            use_container_width=True
-        )
+            st.plotly_chart(
+                fig_stops,
+                use_container_width=True
+            )
+
+            with map_col:
+
+                fig_stops_map = px.scatter_map(
+                    delay_by_stop,
+                    lat="latitude",
+                    lon="longitude",
+                    color="avg_delay_minutes",
+                    hover_name="stop_name",
+                    hover_data={
+                        "avg_delay_minutes": ":.2f",
+                        "observations": True,
+                        "latitude": False,
+                        "longitude": False
+                    },
+                    labels={
+                        "avg_delay_minutes":
+                           "Avg delay (min)",
+                        "observations":
+                            "Observations"
+                   },
+                    center={
+                        "lat": 59.9139,
+                        "lon": 10.7522
+                    },
+                    zoom=9,
+                    height=500,
+                    map_style="carto-positron"
+                )
+
+                fig_stops_map.update_layout(
+                    margin={
+                        "r": 0,
+                        "t": 0,
+                        "l": 0,
+                        "b": 0
+                   }
+                )
+
+                st.plotly_chart(
+                    fig_stops_map,
+                    use_container_width=True
+                )
 
         # Delay distribution
         st.subheader("Delay Distribution")
