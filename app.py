@@ -1,25 +1,24 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import requests
 
 from pathlib import Path
 from datetime import datetime
-from google.transit import gtfs_realtime_pb2
 
+from services.realtime import get_realtime_data
 from components.filters import (
     filter_line_data
 )
-
 from components.metrics import (
     show_main_metrics,
     show_line_metrics,
     show_transport_type_metrics
 )
 from components.maps import show_line_map, show_top_stops_map
-
-from components.charts import show_top_lines_chart, show_top_stops_chart ,show_delay_distribution
-
+from components.charts import (
+    show_top_lines_chart, 
+    show_top_stops_chart,
+    show_delay_distribution
+)
 from components.tables import show_observations_table
 
 # Page settings
@@ -55,111 +54,7 @@ def load_routes():
 routes_df = load_routes()
 stops_df = load_stops()
 
-def get_realtime_data():
 
-    url = (
-        "https://api.entur.io/realtime/v1/"
-        "gtfs-rt/trip-updates?datasource=RUT"
-    )
-
-    headers = {
-        "ET-Client-Name":
-        "student-oslo-transit-project"
-    }
-
-    response = requests.get(
-        url,
-        headers=headers,
-        timeout=30
-    )
-
-    response.raise_for_status()
-
-    # Decode GTFS-Realtime
-    feed = gtfs_realtime_pb2.FeedMessage()
-    feed.ParseFromString(response.content)
-
-    rows = []
-
-    collected_at = datetime.now()
-
-    for entity in feed.entity:
-
-        if not entity.HasField("trip_update"):
-            continue
-
-        trip_update = entity.trip_update
-
-        trip_id = trip_update.trip.trip_id
-        route_id = trip_update.trip.route_id
-
-        for stop_update in trip_update.stop_time_update:
-
-            stop_id = stop_update.stop_id
-            stop_sequence = stop_update.stop_sequence
-
-            arrival_delay = None
-            departure_delay = None
-
-            if stop_update.HasField("arrival"):
-
-                if stop_update.arrival.HasField("delay"):
-                    arrival_delay = (
-                        stop_update.arrival.delay
-                    )
-
-            if stop_update.HasField("departure"):
-
-                if stop_update.departure.HasField("delay"):
-                    departure_delay = (
-                        stop_update.departure.delay
-                    )
-
-            rows.append({
-                "collected_at": collected_at,
-                "trip_id": trip_id,
-                "route_id": route_id,
-                "stop_id": stop_id,
-                "stop_sequence": stop_sequence,
-                "arrival_delay_seconds":
-                    arrival_delay,
-                "departure_delay_seconds":
-                    departure_delay
-            })
-
-    df = pd.DataFrame(rows)
-
-    # Extract line number
-    df["line_number"] = (
-        df["route_id"]
-        .astype(str)
-        .str.split(":")
-        .str[-1]
-    )
-
-    # Convert seconds → minutes
-    df["arrival_delay_minutes"] = (
-        df["arrival_delay_seconds"] / 60
-    )
-
-    # Add stop information
-    df = df.merge(
-        stops_df,
-        on="stop_id",
-        how="left"
-    )
-
-    df = df.merge(
-        routes_df[
-            [
-                "route_id",
-                "transport_type"
-            ]
-        ],
-        on="route_id",
-        how="left"
-    )
-    return df
 
 # Title
 
@@ -174,7 +69,7 @@ st.caption(
 def live_dashboard():
 
     try:
-        df = get_realtime_data()
+        df = get_realtime_data(stops_df, routes_df)
 
         updated_time = datetime.now().strftime(
         "%H:%M:%S"
@@ -215,6 +110,8 @@ def live_dashboard():
             selected_line
         )
 
+        show_observations_table(filtered_line_df, selected_line)
+
         # Map for selected line
  
         st.subheader(f"Line {selected_line} — Stop Map")
@@ -241,7 +138,7 @@ def live_dashboard():
         st.subheader("Delay Distribution")
         show_delay_distribution(df)
 
-        show_observations_table(filtered_line_df, selected_line)
+
 
     except Exception as e:
         st.error(
