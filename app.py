@@ -16,10 +16,13 @@ from components.metrics import (
     show_line_metrics,
     show_transport_type_metrics
 )
+from components.maps import show_line_map, show_top_stops_map
 
-# -----------------------------------
+from components.charts import show_top_lines_chart, show_top_stops_chart ,show_delay_distribution
+
+from components.tables import show_observations_table
+
 # Page settings
-# -----------------------------------
 
 st.set_page_config(
     page_title="Oslo Transit Dashboard",
@@ -27,10 +30,8 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# -----------------------------------
 # Load data
-# -----------------------------------
+
 STOPS_PATH = (
     Path(__file__).parent
     / "data"
@@ -160,12 +161,7 @@ def get_realtime_data():
     )
     return df
 
-
-
-
-# -----------------------------------
 # Title
-# -----------------------------------
 
 st.title("Oslo Public Transport Dashboard")
 
@@ -205,7 +201,6 @@ def live_dashboard():
             "Select line",
             lines
         )
-
         
         line_df = df[
             df["line_number"] == selected_line
@@ -220,279 +215,33 @@ def live_dashboard():
             selected_line
         )
 
-        # -----------------------------------
         # Map for selected line
-        # -----------------------------------
-
+ 
         st.subheader(f"Line {selected_line} — Stop Map")
 
-        map_df = (
-            filtered_line_df
-            .groupby(
-                [
-                    "stop_id",
-                    "stop_name",
-                    "latitude",
-                    "longitude"
-                ],
-                as_index=False
-            )
-            .agg(
-                avg_delay_minutes=(
-            "arrival_delay_minutes",
-                    "mean"
-                ),
-                observations=(
-            "trip_id",
-                    "count"
-                )
-            )
-        )
+        show_line_map(filtered_line_df)
 
-        # Remove stops without coordinates
-        map_df = map_df.dropna(        
-            subset=["latitude", "longitude"]
-        )
+        st.subheader("Top 20 Lines by Average Delay")
 
-        # Round values for display
-        map_df["avg_delay_minutes"] = (
-            map_df["avg_delay_minutes"].round(2)
-        )
-
-        # Interactive Plotly map
-        fig_map = px.scatter_map(
-            map_df,
-            lat="latitude",
-            lon="longitude",
-            color="avg_delay_minutes",
-
-            hover_name="stop_name",
-            hover_data={
-                "avg_delay_minutes": ":.2f",
-                "observations": True,
-                "latitude": False,
-                "longitude": False
-            },
-            labels={
-                "avg_delay_minutes": "Avg delay (min)",
-                "observations": "Observations"
-            },
-            
-            center={
-                "lat": 59.9139,
-                "lon": 10.7522
-            },
-            zoom=11,
-            height=600,
-            map_style="carto-positron"
-  
-        )
-
-        st.plotly_chart(
-            fig_map,
-            use_container_width=True
-        )
-
-        # Average delay by line
-        st.subheader("Top 20 Average Delay by Line")
-
-        delay_by_line = (
-            df
-            .groupby(
-                "line_number",
-                as_index=False
-            )
-            ["arrival_delay_minutes"]
-            .mean()
-            .sort_values(
-                "arrival_delay_minutes",
-                ascending=False
-            )
-            .head(20)
-        )
-
-        fig = px.bar(
-            delay_by_line,
-            x="line_number",
-            y="arrival_delay_minutes",
-            labels={
-                "line_number": "Line",
-                "arrival_delay_minutes":
-                    "Average delay (minutes)"
-            }
-        )
-
-        fig.update_xaxes(
-        type="category"
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
+        show_top_lines_chart(df)
+      
 
         # Top delayed stops
-        st.subheader("Top 30 Stops by Average Delay")
-
-        delay_by_stop = (
-            df
-            .dropna(
-                subset=[
-                    "stop_name",
-                    "latitude",
-                    "longitude",
-                    "arrival_delay_minutes"
-                ]
-            )
-            .groupby(
-                [
-                    "stop_name",
-                    "latitude",
-                    "longitude",
-                ],
-                as_index=False
-            )
-            .agg(
-                avg_delay_minutes=(
-                    "arrival_delay_minutes",
-                    "mean"
-                ),
-                observations=(
-                    "trip_id",
-                    "count"
-                )
-            )
-            .sort_values(
-                "avg_delay_minutes",
-                ascending=False
-            )
-            .head(30)
-        )
+        st.subheader("Top 10 Stops by Average Delay")
 
         chart_col, map_col = st.columns(2)
 
         with chart_col:
-            fig_stops = px.bar(
-                delay_by_stop,
-                x="stop_name",
-                y="avg_delay_minutes",
-                labels={
-                    "stop_name": "Stop",
-                    "avg_delay_minutes":
-                        "Average delay (minutes)"
-                }
-            )
-            fig_stops.update_xaxes(
-                type="category"
-            )
+            show_top_stops_chart(df)
 
-            st.plotly_chart(
-                fig_stops,
-                use_container_width=True
-            )
-
-            with map_col:
-
-                fig_stops_map = px.scatter_map(
-                    delay_by_stop,
-                    lat="latitude",
-                    lon="longitude",
-                    color="avg_delay_minutes",
-                    hover_name="stop_name",
-                    hover_data={
-                        "avg_delay_minutes": ":.2f",
-                        "observations": True,
-                        "latitude": False,
-                        "longitude": False
-                    },
-                    labels={
-                        "avg_delay_minutes":
-                           "Avg delay (min)",
-                        "observations":
-                            "Observations"
-                   },
-                    center={
-                        "lat": 59.9139,
-                        "lon": 10.7522
-                    },
-                    zoom=9,
-                    height=500,
-                    map_style="carto-positron"
-                )
-
-                fig_stops_map.update_layout(
-                    margin={
-                        "r": 0,
-                        "t": 0,
-                        "l": 0,
-                        "b": 0
-                   }
-                )
-
-                st.plotly_chart(
-                    fig_stops_map,
-                    use_container_width=True
-                )
+        with map_col:
+            show_top_stops_map(df)  
 
         # Delay distribution
         st.subheader("Delay Distribution")
+        show_delay_distribution(df)
 
-        fig2 = px.histogram(
-            df.dropna(
-                subset=["arrival_delay_minutes"]
-            ),
-            x="arrival_delay_minutes",
-            nbins=40,
-            labels={
-                "arrival_delay_minutes": "Delay (minutes)"
-            }
-        )
-
-        st.plotly_chart(
-           fig2,
-            use_container_width=True
-        )
-
-        st.subheader(
-            f"Current Observations — Line {selected_line}"
-        )
-
-        display_df = filtered_line_df[
-            [
-                "stop_name",
-                "arrival_delay_seconds",
-                "arrival_delay_minutes"
-            ]
-        ].copy()
-
-
-        display_df["arrival_delay_minutes"] = (
-            display_df[
-                "arrival_delay_minutes"
-           ].round(2)
-        )
-
-
-        display_df = display_df.rename(
-            columns={
-                "stop_name": "Stop",
-                "arrival_delay_seconds":
-                    "Delay (seconds)",
-                "arrival_delay_minutes":
-                    "Delay (minutes)"
-            }
-        )
-
-
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True
-           )
-
-
-
+        show_observations_table(filtered_line_df, selected_line)
 
     except Exception as e:
         st.error(
