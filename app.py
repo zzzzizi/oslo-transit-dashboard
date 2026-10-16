@@ -23,7 +23,7 @@ from components.metrics import (
 
 st.set_page_config(
     page_title="Oslo Transit Dashboard",
-    page_icon="🚌",
+
     layout="wide"
 )
 
@@ -167,7 +167,7 @@ def get_realtime_data():
 # Title
 # -----------------------------------
 
-st.title("🚌 Oslo Public Transport Dashboard")
+st.title("Oslo Public Transport Dashboard")
 
 st.caption(
     "Real-time public transport data from Entur / Ruter"
